@@ -9,6 +9,7 @@
 #import "TWRDownloadManager.h"
 #import "TWRDownloadObject.h"
 #import <UIKit/UIKit.h>
+#import <UserNotifications/UserNotifications.h>
 
 @interface TWRDownloadManager () <NSURLSessionDelegate, NSURLSessionDownloadDelegate>
 
@@ -42,7 +43,7 @@
         if (floor(NSFoundationVersionNumber) > NSFoundationVersionNumber_iOS_7_1) {
             backgroundConfiguration = [NSURLSessionConfiguration backgroundSessionConfigurationWithIdentifier:[[NSBundle mainBundle] bundleIdentifier]];
         } else {
-            backgroundConfiguration = [NSURLSessionConfiguration backgroundSessionConfiguration:@"re.touchwa.downloadmanager"];
+            backgroundConfiguration = [NSURLSessionConfiguration backgroundSessionConfigurationWithIdentifier:@"re.touchwa.downloadmanager"];
         }
 
         self.backgroundSession = [NSURLSession sessionWithConfiguration:backgroundConfiguration delegate:self delegateQueue:nil];
@@ -281,9 +282,28 @@ totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite {
 
     dispatch_async(dispatch_get_main_queue(), ^{
         // Show a local notification when download is over.
-        UILocalNotification *localNotification = [[UILocalNotification alloc] init];
-        localNotification.alertBody = [NSString stringWithFormat:@"%@ has been downloaded", download.friendlyName];
-        [[UIApplication sharedApplication] presentLocalNotificationNow:localNotification];
+//        UILocalNotification *localNotification = [[UILocalNotification alloc] init];
+//        localNotification.alertBody = [NSString stringWithFormat:@"%@ has been downloaded", download.friendlyName];
+//        [[UIApplication sharedApplication] presentLocalNotificationNow:localNotification];1
+        UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+        [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert + UNAuthorizationOptionSound + UNAuthorizationOptionBadge) completionHandler:^(BOOL granted, NSError * _Nullable error) {
+        if (!granted) {
+        } else {
+            UNMutableNotificationContent *localNotification = [UNMutableNotificationContent new];
+            localNotification.title = [NSString localizedUserNotificationStringForKey:@"Download Progress!" arguments:nil];
+            localNotification.body = [NSString localizedUserNotificationStringForKey:[NSString stringWithFormat:@"%@ has been downloaded", download.friendlyName] arguments:nil];
+            localNotification.sound = [UNNotificationSound defaultSound];
+            UNTimeIntervalNotificationTrigger *trigger = [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:10 repeats:NO];
+                        
+            UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:@"Download Progress!" content:localNotification trigger:trigger];
+            
+            UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+            [center addNotificationRequest:request withCompletionHandler:^(NSError * _Nullable error) {
+                NSLog(@"Notification created");
+            }];
+        }
+        }];
+        
     });
 }
 
@@ -480,16 +500,23 @@ totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite {
         if ([downloadTasks count] == 0) {
             if (self.backgroundTransferCompletionHandler != nil) {
                 // Copy locally the completion handler.
-                void(^completionHandler)() = self.backgroundTransferCompletionHandler;
+                void(^completionHandler)(void) = self.backgroundTransferCompletionHandler;
 
                 [[NSOperationQueue mainQueue] addOperationWithBlock:^{
                     // Call the completion handler to tell the system that there are no other background transfers.
                     completionHandler();
-
-                    // Show a local notification when all downloads are over.
-                    UILocalNotification *localNotification = [[UILocalNotification alloc] init];
-                    localNotification.alertBody = @"All files have been downloaded!";
-                    [[UIApplication sharedApplication] presentLocalNotificationNow:localNotification];
+                    UNMutableNotificationContent *localNotification = [UNMutableNotificationContent new];
+                    localNotification.title = [NSString localizedUserNotificationStringForKey:@"Download Progress!" arguments:nil];
+                    localNotification.body = [NSString localizedUserNotificationStringForKey:@"Download Completed" arguments:nil];
+                    localNotification.sound = [UNNotificationSound defaultSound];
+                    UNTimeIntervalNotificationTrigger *trigger = [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:10 repeats:NO];
+                                
+                    UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:@"Download Completed" content:localNotification trigger:trigger];
+                    
+                    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+                    [center addNotificationRequest:request withCompletionHandler:^(NSError * _Nullable error) {
+                        NSLog(@"Notification created");
+                    }];
                 }];
 
                 // Make nil the backgroundTransferCompletionHandler.
